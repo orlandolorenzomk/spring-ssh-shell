@@ -24,7 +24,7 @@ An embeddable SSH shell server for Java applications. Add an interactive SSH int
 
 ```xml
 <dependency>
-    <groupId>dev.orlandolorenzo</groupId>
+    <groupId>io.github.orlandolorenzomk</groupId>
     <artifactId>spring-ssh-shell</artifactId>
     <version>1.0-SNAPSHOT</version>
 </dependency>
@@ -33,7 +33,7 @@ An embeddable SSH shell server for Java applications. Add an interactive SSH int
 ### Gradle
 
 ```groovy
-implementation 'dev.orlandolorenzo:spring-ssh-shell:1.0-SNAPSHOT'
+implementation 'io.github.orlandolorenzomk:spring-ssh-shell:1.0-SNAPSHOT'
 ```
 
 ---
