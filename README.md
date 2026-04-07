@@ -1,44 +1,12 @@
 # spring-ssh-shell
 
-An embeddable SSH shell server for Java applications. Add an interactive SSH interface to any JVM process in a few lines of code — no Spring required despite the name.
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.orlandolorenzomk/spring-ssh-shell)](https://central.sonatype.com/artifact/io.github.orlandolorenzomk/spring-ssh-shell)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](https://www.apache.org/licenses/LICENSE-2.0)
+[![Java](https://img.shields.io/badge/java-17%2B-orange)](https://adoptium.net)
 
-## Features
+Embed a fully working SSH shell into any Java application in a few lines of code.
 
-- Fluent builder API
-- Single-user (username + password) or fully custom multi-user authentication
-- Persistent host key across restarts (no more "host key changed" warnings)
-- Parent directories for the host key file are created automatically
-- Configurable welcome banner
-- Idle session timeout
-- Injectable `ExecutorService` for container-managed thread pools
-- Zero dependencies beyond Apache MINA SSHD and JUL (no SLF4J in your code)
-
-## Requirements
-
-- Java 17+
-- Maven or Gradle
-
-## Installation
-
-### Maven
-
-```xml
-<dependency>
-    <groupId>io.github.orlandolorenzomk</groupId>
-    <artifactId>spring-ssh-shell</artifactId>
-    <version>1.0-SNAPSHOT</version>
-</dependency>
-```
-
-### Gradle
-
-```groovy
-implementation 'io.github.orlandolorenzomk:spring-ssh-shell:1.0-SNAPSHOT'
-```
-
----
-
-## Quick start
+No Spring required. No agents. No sidecar processes. Just a dependency and a builder.
 
 ```java
 SshShellServer server = SshShellServer.builder()
@@ -50,56 +18,57 @@ SshShellServer server = SshShellServer.builder()
 server.start();
 ```
 
-Connect with any SSH client:
-
 ```bash
 ssh admin@localhost -p 2222
 ```
 
-Call `server.stop()` to shut down gracefully.
+---
+
+## Why
+
+Most Java applications have no runtime introspection beyond HTTP endpoints and log files. Attaching a debugger to production is risky, adding custom HTTP endpoints for internal tooling is noisy, and redeploying just to run a one-off query is wasteful.
+
+spring-ssh-shell gives you a proper interactive shell — accessible from anywhere via standard SSH — wired directly into your running application context. Query internal state, trigger operations, inspect live data, all without touching your public API surface.
 
 ---
 
-## Builder reference
+## Installation
 
-| Method                                | Default                     | Description                                            |
-| ------------------------------------- | --------------------------- | ------------------------------------------------------ |
-| `port(int)`                           | `2222`                      | Port to listen on                                      |
-| `username(String)`                    | —                           | Single-user login (requires `password`)                |
-| `password(String)`                    | —                           | Single-user password (requires `username`)             |
-| `authenticator(SshAuthenticator)`     | —                           | Custom auth — takes precedence over username/password  |
-| `commandHandler(ShellCommandHandler)` | **required**                | Handles every command the client sends                 |
-| `banner(String)`                      | `"Welcome to SSH Shell..."` | Text shown to the client on connect                    |
-| `idleTimeoutSeconds(int)`             | `0` (disabled)              | Disconnect idle clients after N seconds                |
-| `hostKeyFile(Path)`                   | in-memory                   | Persist the server host key to disk                    |
-| `executorService(ExecutorService)`    | internal cached pool        | Use your own thread pool                               |
+### Maven
+
+```xml
+<dependency>
+    <groupId>io.github.orlandolorenzomk</groupId>
+    <artifactId>spring-ssh-shell</artifactId>
+    <version>1.1.1</version>
+</dependency>
+```
+
+### Gradle
+
+```groovy
+implementation 'io.github.orlandolorenzomk:spring-ssh-shell:1.1.1'
+```
+
+**Requirements:** Java 17+
 
 ---
 
-## Integration examples
-
-### Plain Java application
-
-The simplest possible integration — start with the process, stop on shutdown.
+## Quick start
 
 ```java
-public class App {
+SshShellServer server = SshShellServer.builder()
+    .port(2222)
+    .username("admin")
+    .password("secret")
+    .hostKeyFile(Path.of("data/host.key"))
+    .idleTimeoutSeconds(300)
+    .banner("MyApp Admin Shell — type 'help' for commands")
+    .commandHandler(new AppShellHandler())
+    .build();
 
-    public static void main(String[] args) {
-        SshShellServer shell = SshShellServer.builder()
-            .port(2222)
-            .username("admin")
-            .password("secret")
-            .hostKeyFile(Path.of("data/host.key"))
-            .banner("MyApp Admin Shell — type 'help' for commands")
-            .idleTimeoutSeconds(300)
-            .commandHandler(new AppShellHandler())
-            .build();
-
-        shell.start();
-        Runtime.getRuntime().addShutdownHook(new Thread(shell::stop));
-    }
-}
+server.start();
+Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
 ```
 
 ```java
@@ -110,7 +79,7 @@ public class AppShellHandler implements ShellCommandHandler {
         return switch (input.trim()) {
             case "help"    -> "Commands: status, version, help";
             case "status"  -> "Running since " + ManagementFactory.getRuntimeMXBean().getUptime() + "ms";
-            case "version" -> "1.0.0";
+            case "version" -> "1.1.1";
             default        -> "Unknown command: " + input;
         };
     }
@@ -119,13 +88,27 @@ public class AppShellHandler implements ShellCommandHandler {
 
 ---
 
+## Builder reference
+
+| Method                                | Default                     | Description                                           |
+|---------------------------------------|-----------------------------|-------------------------------------------------------|
+| `port(int)`                           | `2222`                      | Port to listen on                                     |
+| `username(String)`                    | —                           | Single-user login (requires `password`)               |
+| `password(String)`                    | —                           | Single-user password (requires `username`)            |
+| `authenticator(SshAuthenticator)`     | —                           | Custom auth — takes precedence over username/password |
+| `commandHandler(ShellCommandHandler)` | **required**                | Handles every command the client sends                |
+| `banner(String)`                      | `"Welcome to SSH Shell..."` | Text shown to the client on connect                   |
+| `idleTimeoutSeconds(int)`             | `0` (disabled)              | Disconnect idle clients after N seconds               |
+| `hostKeyFile(Path)`                   | in-memory                   | Persist the server host key to disk                   |
+| `executorService(ExecutorService)`    | internal cached pool        | Use your own thread pool                              |
+
+---
+
+## Integration examples
+
 ### Spring Boot
 
-The recommended pattern is to wrap `SshShellServer` in a `SmartLifecycle` bean. Spring will call `start()` and `stop()` automatically at the right phase — after all other beans are ready on startup, and before the context closes on shutdown.
-
-#### SshShellLifecycle
-
-Copy this class into your project once and reuse it across services:
+Wrap `SshShellServer` in a `SmartLifecycle` bean. Spring will call `start()` and `stop()` automatically — after all other beans are ready on startup, and before the context closes on shutdown.
 
 ```java
 public class SshShellLifecycle implements SmartLifecycle {
@@ -137,25 +120,13 @@ public class SshShellLifecycle implements SmartLifecycle {
         this.server = server;
     }
 
-    @Override
-    public void start() {
-        server.start();
-        running = true;
-    }
-
-    @Override
-    public void stop() {
-        server.stop();
-        running = false;
-    }
-
+    @Override public void start()        { server.start(); running = true; }
+    @Override public void stop()         { server.stop();  running = false; }
     @Override public boolean isRunning()     { return running; }
     @Override public boolean isAutoStartup() { return true; }
     @Override public int getPhase()          { return Integer.MAX_VALUE; }
 }
 ```
-
-#### Configuration
 
 Externalize all SSH settings via environment variables so credentials never live in source code:
 
@@ -163,20 +134,11 @@ Externalize all SSH settings via environment variables so credentials never live
 @Configuration
 public class SshShellConfig {
 
-    @Value("${ssh.shell.port:2222}")
-    private int port;
-
-    @Value("${ssh.shell.username}")
-    private String username;
-
-    @Value("${ssh.shell.password}")
-    private String password;
-
-    @Value("${ssh.shell.host-key-file:data/ssh_host_rsa_key}")
-    private String hostKeyFile;
-
-    @Value("${ssh.shell.idle-timeout-seconds:600}")
-    private int idleTimeoutSeconds;
+    @Value("${ssh.shell.port:2222}")         private int port;
+    @Value("${ssh.shell.username}")          private String username;
+    @Value("${ssh.shell.password}")          private String password;
+    @Value("${ssh.shell.host-key-file:data/ssh_host_rsa_key}") private String hostKeyFile;
+    @Value("${ssh.shell.idle-timeout-seconds:600}") private int idleTimeoutSeconds;
 
     @Bean
     public SshShellLifecycle sshShell(AppShellHandler handler) {
@@ -186,12 +148,6 @@ public class SshShellConfig {
             .password(password)
             .hostKeyFile(Path.of(hostKeyFile))
             .idleTimeoutSeconds(idleTimeoutSeconds)
-            .banner("""
-                    ╔══════════════════════════════════╗
-                    ║        MyApp Admin Shell         ║
-                    ╚══════════════════════════════════╝
-                    Type 'help' for available commands.
-                    """)
             .commandHandler(handler)
             .build();
 
@@ -214,9 +170,7 @@ ssh:
 
 `SSH_SHELL_PASSWORD` has no default — the application will refuse to start if it is not set.
 
-#### Command handler
-
-Implement `ShellCommandHandler` as a Spring `@Component` so you can inject any service you need:
+Implement `ShellCommandHandler` as a `@Component` so you can inject any service:
 
 ```java
 @Component
@@ -228,9 +182,7 @@ public class AppShellHandler implements ShellCommandHandler {
     @Override
     public String handle(String input) {
         String[] parts = input.trim().split("\\s+");
-        String command = parts[0];
-
-        return switch (command) {
+        return switch (parts[0]) {
             case "list-keys"    -> authenticationService.findAll().toString();
             case "generate-key" -> parts.length < 2
                     ? "Usage: generate-key <name>"
@@ -244,19 +196,16 @@ public class AppShellHandler implements ShellCommandHandler {
                 yield "Deleted.";
             }
             case "help" -> "Commands: list-keys, generate-key <name>, validate-key <uuid>, delete-key <uuid>";
-            default     -> "Unknown command: " + command;
+            default     -> "Unknown command: " + parts[0];
         };
     }
 }
 ```
 
-The client session looks like this:
+The client session:
 
 ```
-╔══════════════════════════════════╗
-║        MyApp Admin Shell         ║
-╚══════════════════════════════════╝
-Type 'help' for available commands.
+MyApp Admin Shell — type 'help' for commands
 $ help
 Commands: list-keys, generate-key <name>, validate-key <uuid>, delete-key <uuid>
 $ generate-key device-001
@@ -274,22 +223,17 @@ Bye.
 Use `SshAuthenticator` instead of `username`/`password` when you need more than one user or want to validate credentials against an external source.
 
 ```java
-Map<String, String> users = Map.of(
-    "alice", "pass1",
-    "bob",   "pass2"
-);
-
 SshShellServer server = SshShellServer.builder()
     .port(2222)
     .authenticator((username, password) -> {
         String expected = users.get(username);
         return expected != null && expected.equals(password);
     })
-    .commandHandler(input -> "Hello, " + input)
+    .commandHandler(input -> "Hello, " + username)
     .build();
 ```
 
-#### Database-backed authentication (Spring example)
+#### Database-backed authentication
 
 ```java
 @Component
@@ -309,29 +253,17 @@ public class DbSshAuthenticator implements SshAuthenticator {
 }
 ```
 
-```java
-@Bean
-public SshShellLifecycle sshShell(DbSshAuthenticator auth, AppShellHandler handler) {
-    SshShellServer server = SshShellServer.builder()
-        .port(2222)
-        .authenticator(auth)
-        .commandHandler(handler)
-        .build();
-    return new SshShellLifecycle(server);
-}
-```
-
 ---
 
 ### Persistent host key
 
-Without a host key file, a new RSA key is generated on every restart and clients will see:
+Without a host key file, a new RSA key is generated on every restart and SSH clients will warn:
 
 ```
 WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
 ```
 
-Point `hostKeyFile` to a path on disk. The file — and any missing parent directories — are created automatically on first start and reused on every subsequent start.
+Point `hostKeyFile` to a path on disk. The file and any missing parent directories are created automatically on first start and reused on every subsequent one. The file is written with `600` permissions on POSIX systems.
 
 ```java
 SshShellServer server = SshShellServer.builder()
@@ -342,61 +274,17 @@ SshShellServer server = SshShellServer.builder()
     .build();
 ```
 
-Keep this file out of version control:
+Keep the file out of version control:
 
-```
-# .gitignore
+```gitignore
 **/data/ssh_host_rsa_key
 ```
 
-And restrict its permissions:
-
-```bash
-chmod 600 data/ssh_host_rsa_key
-```
-
 ---
 
-### Idle timeout
+### Error handling
 
-Disconnect clients that have not sent a command within a time window. Useful in production to free resources from forgotten sessions.
-
-```java
-SshShellServer server = SshShellServer.builder()
-    .username("admin")
-    .password("secret")
-    .idleTimeoutSeconds(300)   // 5 minutes
-    .commandHandler(input -> "ok")
-    .build();
-```
-
----
-
-### Custom banner
-
-The banner is printed immediately when the client connects, before the first prompt.
-
-```java
-String banner = """
-    ╔══════════════════════════════════╗
-    ║   fleet-locate / gps-service     ║
-    ╚══════════════════════════════════╝
-    Type 'help' for available commands.
-    """;
-
-SshShellServer server = SshShellServer.builder()
-    .username("admin")
-    .password("secret")
-    .banner(banner)
-    .commandHandler(input -> "ok")
-    .build();
-```
-
----
-
-### Error handling in commands
-
-`ShellCommandHandler.handle()` declares `throws Exception`. Any thrown exception is caught by the shell, logged at `SEVERE`, and its message is written back to the client as `Error: <message>`. You do not need to wrap every handler branch in try/catch.
+`ShellCommandHandler.handle()` declares `throws Exception`. Any uncaught exception is logged at `SEVERE` and its message is written back to the client as `Error: <message>` — no try/catch required in every branch.
 
 ```java
 .commandHandler(input -> {
@@ -404,14 +292,12 @@ SshShellServer server = SshShellServer.builder()
     return switch (parts[0]) {
         case "validate-key" -> {
             if (parts.length < 2) throw new IllegalArgumentException("Usage: validate-key <uuid>");
-            yield String.valueOf(authenticationService.validate(UUID.fromString(parts[1])));
+            yield String.valueOf(authService.validate(UUID.fromString(parts[1])));
         }
         default -> "Unknown command: " + parts[0];
     };
 })
 ```
-
-The client sees:
 
 ```
 $ validate-key
@@ -421,9 +307,9 @@ $
 
 ---
 
-### Sharing a thread pool
+### Shared thread pool
 
-If you run multiple services and want to manage a single thread pool, pass your own `ExecutorService`. The server will use it but will **not** shut it down when `stop()` is called — lifecycle is yours.
+If you manage a shared `ExecutorService` across services, pass it in. The server uses it but will **not** shut it down when `stop()` is called — lifecycle ownership stays with you.
 
 ```java
 ExecutorService sharedPool = Executors.newFixedThreadPool(
@@ -443,15 +329,15 @@ SshShellServer server = SshShellServer.builder()
 
 ## Public API
 
-Only three types are part of the public API:
+Only three types are part of the public contract:
 
-| Type                  | Description                                                                       |
-| --------------------- | --------------------------------------------------------------------------------- |
+| Type                  | Description                                                                        |
+|-----------------------|------------------------------------------------------------------------------------|
 | `SshShellServer`      | The server. Build with `SshShellServer.builder()`, then call `start()` / `stop()` |
-| `ShellCommandHandler` | Functional interface — implement to handle commands                               |
-| `SshAuthenticator`    | Functional interface — implement for custom authentication                        |
+| `ShellCommandHandler` | Functional interface — implement to handle commands                                |
+| `SshAuthenticator`    | Functional interface — implement for custom authentication                         |
 
-All other classes (`SshShellSession`, `SshHostKeyProvider`) are package-private implementation details and are not part of the API.
+All other classes are package-private implementation details.
 
 ---
 
@@ -459,16 +345,22 @@ All other classes (`SshShellSession`, `SshHostKeyProvider`) are package-private 
 
 The library uses `java.util.logging` (JUL). Log names follow the class hierarchy under `dev.orlandolorenzo.ssh`.
 
-To configure in a plain Java app:
+Plain Java:
 
 ```java
 Logger.getLogger("dev.orlandolorenzo.ssh").setLevel(Level.WARNING);
 ```
 
-In a Spring Boot app, bridge JUL to your logging framework by adding `jul-to-slf4j` and calling `SLF4JBridgeHandler.install()` in your configuration, or let Spring Boot handle it automatically (it does this by default).
+Spring Boot bridges JUL to SLF4J automatically. No additional configuration needed.
+
+---
+
+## Releases
+
+See the [releases](releases/) folder for a full changelog.
 
 ---
 
 ## License
 
-Apache License 2.0
+[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
