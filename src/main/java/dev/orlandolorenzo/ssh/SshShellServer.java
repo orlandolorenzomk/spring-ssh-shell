@@ -3,7 +3,9 @@ package dev.orlandolorenzo.ssh;
 import org.apache.sshd.core.CoreModuleProperties;
 import org.apache.sshd.server.SshServer;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -94,6 +96,14 @@ public class SshShellServer {
         }
     }
 
+    public boolean isRunning() {
+        return sshServer.isStarted();
+    }
+
+    public int getPort() {
+        return sshServer.getPort();
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -171,7 +181,11 @@ public class SshShellServer {
                     throw new IllegalStateException("Either authenticator or username and password are required");
                 }
                 final String u = username, p = password;
-                authenticator = (user, pass) -> u.equals(user) && p.equals(pass);
+                authenticator = (user, pass) -> {
+                    // Use non-short-circuit & so both comparisons always run (prevents timing side-channel)
+                    return MessageDigest.isEqual(u.getBytes(StandardCharsets.UTF_8), user.getBytes(StandardCharsets.UTF_8))
+                         & MessageDigest.isEqual(p.getBytes(StandardCharsets.UTF_8), pass.getBytes(StandardCharsets.UTF_8));
+                };
             }
             if (handler == null) {
                 throw new IllegalStateException("commandHandler is required");

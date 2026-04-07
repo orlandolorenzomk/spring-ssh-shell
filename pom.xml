@@ -6,7 +6,7 @@
 
     <groupId>io.github.orlandolorenzomk</groupId>
     <artifactId>spring-ssh-shell</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.1</version>
     <packaging>jar</packaging>
 
     <name>spring-ssh-shell</name>
@@ -34,7 +34,7 @@
         <connection>scm:git:git://github.com/orlandolorenzomk/spring-ssh-shell.git</connection>
         <developerConnection>scm:git:ssh://github.com/orlandolorenzomk/spring-ssh-shell.git</developerConnection>
         <url>https://github.com/orlandolorenzomk/spring-ssh-shell</url>
-        <tag>v1.0.0</tag>
+        <tag>v1.1.1</tag>
     </scm>
 
     <properties>
@@ -63,6 +63,7 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-jdk14</artifactId>
             <version>1.7.32</version>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -144,7 +145,7 @@
                         <extensions>true</extensions>
                         <configuration>
                             <publishingServerId>central</publishingServerId>
-                            <autoPublish>false</autoPublish>
+                            <autoPublish>true</autoPublish>
                         </configuration>
                     </plugin>
                 </plugins>

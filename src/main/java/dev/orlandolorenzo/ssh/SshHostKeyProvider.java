@@ -7,14 +7,19 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.logging.Logger;
 
 class SshHostKeyProvider extends AbstractKeyPairProvider {
+
+    private static final Logger log = Logger.getLogger(SshHostKeyProvider.class.getName());
 
     private final Path keyFile;
     private KeyPair keyPair;
@@ -40,7 +45,8 @@ class SshHostKeyProvider extends AbstractKeyPairProvider {
             try {
                 return load();
             } catch (Exception e) {
-                // corrupted or unreadable — regenerate
+                log.warning("Host key file is corrupted or unreadable, regenerating: " + keyFile +
+                        " — existing SSH clients will see a host key warning: " + e.getMessage());
             }
         }
         KeyPair kp = generate();
@@ -67,6 +73,12 @@ class SshHostKeyProvider extends AbstractKeyPairProvider {
                 Files.createDirectories(keyFile.getParent());
             }
             Files.writeString(keyFile, privateKeyBase64 + "\n" + publicKeyBase64, StandardCharsets.UTF_8);
+            try {
+                Files.setPosixFilePermissions(keyFile,
+                        EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+            } catch (UnsupportedOperationException ignored) {
+                // non-POSIX filesystem (e.g. Windows) — skip permission hardening
+            }
         } catch (IOException e) {
             throw new RuntimeException("Failed to save host key to " + keyFile, e);
         }

@@ -13,12 +13,15 @@ class SshShellSession implements Command {
 
     private static final Logger LOGGER = Logger.getLogger(SshShellSession.class.getName());
 
+    private static final String FOOTER = "spring-ssh-shell \u2014 developed with \u2665 by github.com/orlandolorenzomk";
+
     private final ShellCommandHandler handler;
     private final ExecutorService executorService;
     private final String banner;
 
     private InputStream inputStream;
     private OutputStream outputStream;
+    private OutputStream errorStream;
     private ExitCallback exitCallback;
     private volatile boolean running = true;
 
@@ -39,7 +42,8 @@ class SshShellSession implements Command {
     }
 
     @Override
-    public void setErrorStream(OutputStream outputStream) {
+    public void setErrorStream(OutputStream errorStream) {
+        this.errorStream = errorStream;
     }
 
     @Override
@@ -48,19 +52,22 @@ class SshShellSession implements Command {
     }
 
     @Override
-    public void start(ChannelSession channelSession, Environment environment) throws IOException {
+    public void start(ChannelSession channelSession, Environment environment) {
         executorService.submit(this::runShell);
     }
 
     @Override
-    public void destroy(ChannelSession channelSession) throws Exception {
+    public void destroy(ChannelSession channelSession) {
         running = false;
     }
 
     private void runShell() {
         PrintWriter writer = new PrintWriter(outputStream, true);
 
-        writer.print(banner + "\r\n$ ");
+        // Normalize newlines: SSH raw mode requires \r\n — bare \n moves down but not to column 0,
+        // causing a staircase effect in multi-line banners.
+        String normalizedBanner = banner.replace("\r\n", "\n").replace("\n", "\r\n");
+        writer.print(normalizedBanner + "\r\n" + FOOTER + "\r\n$ ");
         writer.flush();
 
         try {
@@ -102,6 +109,18 @@ class SshShellSession implements Command {
                         writer.print("\b \b");
                         writer.flush();
                     }
+                } else if (c == 27) {
+                    // ESC: consume the escape sequence to prevent corruption of the line buffer.
+                    // Handles CSI sequences (\x1b[ or \x1bO followed by parameter bytes and a final byte)
+                    // as produced by arrow keys, function keys, Delete, etc.
+                    int next = inputStream.read();
+                    if (next == '[' || next == 'O') {
+                        int seq;
+                        do {
+                            seq = inputStream.read();
+                        } while (seq != -1 && !Character.isLetter(seq) && seq != '~');
+                    }
+                    // bare ESC already consumed — nothing to echo
                 } else {
                     lineBuffer.append((char) c);
                     writer.print((char) c);
